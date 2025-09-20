@@ -67,111 +67,72 @@ def summarize_transcript(transcript_data):
 
 
 def parse_voice_command(speech_text):
-    """Parse voice command into structured action for tmux"""
+    """Classify voice command into simple action categories"""
 
     if not speech_text or not speech_text.strip():
-        return {"action": "unclear", "tmux_command": None, "text": None}
+        return ("unclear", speech_text)
 
-    speech_text = speech_text.strip().lower()
+    original_speech = speech_text.strip()
 
-    # Call Groq API for parsing
+    # Call Groq API for simple classification
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
                 {
                     "role": "system",
-                    "content": """You parse voice commands for controlling Claude Code via tmux. Return JSON with:
-- action: "approve", "reject", "add_text", or "unclear"
-- tmux_command: "A" for approve, "R" for reject, the text for add_text, null for unclear
-- text: extracted text for add_text actions, null otherwise
-
-Examples:
-"approve" -> {"action": "approve", "tmux_command": "A", "text": null}
-"no" -> {"action": "reject", "tmux_command": "R", "text": null}
-"add text hello" -> {"action": "add_text", "tmux_command": "hello", "text": "hello"}
-"I don't know" -> {"action": "unclear", "tmux_command": null, "text": null}""",
+                    "content": "Return only: 'approve', 'approve_all', 'reject', or 'unclear'",
                 },
-                {"role": "user", "content": f"Parse this voice command: {speech_text}"},
+                {"role": "user", "content": f"Voice: {original_speech}"},
             ],
             temperature=0.1,
-            max_completion_tokens=200,
+            max_completion_tokens=50,
             top_p=1,
             stream=False,
         )
 
-        response = completion.choices[0].message.content.strip()
+        response = completion.choices[0].message.content.strip().lower()
 
-        # Try to extract JSON from response
-        import json
-
-        try:
-            # Look for JSON in the response
-            json_match = re.search(r"\{.*\}", response, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                return result
-        except json.JSONDecodeError:
+        # Validate response is one of expected categories
+        if response in ["approve", "approve_all", "reject", "unclear"]:
+            return (response, original_speech)
+        else:
+            # If unexpected response, fall through to fallback
             pass
-
-        # If JSON parsing fails, fall through to fallback
 
     except Exception:
         pass
 
     # Fallback: Simple keyword matching
-    return _fallback_command_parsing(speech_text)
+    return _fallback_classification(original_speech)
 
 
-def _fallback_command_parsing(speech_text):
-    """Fallback command parsing using simple keyword matching"""
+def _fallback_classification(speech_text):
+    """Fallback classification using simple keyword matching"""
 
     speech_lower = speech_text.lower()
 
-    # Check for approval FIRST if it's a simple approval + action pattern
-    if re.match(r"(ok|okay|yes)\s+(write|add|create)", speech_lower):
-        return {"action": "approve", "tmux_command": "A", "text": None}
-
-    # Check for text addition patterns (more specific)
-    text_patterns = [
-        r"add (?:the )?text (.+)",
-        r"enter (?:the )?text (.+)",
-        r"type (?:the )?(?:message )?(.+)",
-        r"write (.+)",
-        r"input (.+)",
-    ]
-
-    for pattern in text_patterns:
-        # Search with case-insensitive but extract from original text
-        match = re.search(pattern, speech_lower)
-        if match:
-            # Find the same pattern in original text to preserve case
-            original_match = re.search(pattern, speech_text, re.IGNORECASE)
-            if original_match:
-                extracted_text = original_match.group(1).strip()
-            else:
-                extracted_text = match.group(1).strip()
-            return {
-                "action": "add_text",
-                "tmux_command": extracted_text,
-                "text": extracted_text,
-            }
+    # Check for approve_all keywords
+    approve_all_keywords = ["approve all", "accept all", "ok all", "yes all"]
+    for keyword in approve_all_keywords:
+        if keyword in speech_lower:
+            return ("approve_all", speech_text)
 
     # Check for approval keywords as whole words
     approve_keywords = ["approve", "yes", "accept", "ok", "okay"]
     for keyword in approve_keywords:
         # Use word boundaries for exact matching
         if re.search(r"\b" + re.escape(keyword) + r"\b", speech_lower):
-            return {"action": "approve", "tmux_command": "A", "text": None}
+            return ("approve", speech_text)
 
     # Check for rejection keywords (must be exact words or at start)
     reject_keywords = ["reject", "no", "decline", "cancel", "deny"]
     for keyword in reject_keywords:
         if speech_lower == keyword or speech_lower.startswith(keyword + " "):
-            return {"action": "reject", "tmux_command": "R", "text": None}
+            return ("reject", speech_text)
 
     # Default to unclear if no patterns match
-    return {"action": "unclear", "tmux_command": None, "text": None}
+    return ("unclear", speech_text)
 
 
 # Backward compatibility - keep existing function name
@@ -191,8 +152,16 @@ if __name__ == "__main__":
     print(f"Summary: {summary}")
 
     print("\nTesting command parsing...")
-    test_commands = ["approve this", "reject", "add text hello world", "I'm not sure"]
+    test_commands = [
+        "approve this",
+        "approve all changes",
+        "reject",
+        "no this is wrong",
+        "I'm not sure",
+    ]
 
     for cmd in test_commands:
-        result = parse_voice_command(cmd)
-        print(f"'{cmd}' -> {result}")
+        classification, original_speech = parse_voice_command(cmd)
+        print(
+            f"'{cmd}' -> classification: '{classification}', original: '{original_speech}'"
+        )
