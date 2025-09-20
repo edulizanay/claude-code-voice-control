@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 def get_interactions(transcript_path):
+    """Get structured conversation data: context + last message"""
     transcript_path = Path(transcript_path)
 
     entries = []
@@ -64,12 +65,37 @@ def get_interactions(transcript_path):
             break
 
     messages.reverse()
-    return messages[-3:]
+    last_three = messages[-3:]
+
+    # Structure the data: context (first 2) + last message
+    if len(last_three) >= 3:
+        return {
+            "context": last_three[:2],  # First Claude + User
+            "last_message": last_three[2],  # Last Claude message
+        }
+    else:
+        # Fallback for insufficient messages
+        return {
+            "context": last_three[:-1] if len(last_three) > 1 else [],
+            "last_message": last_three[-1]
+            if last_three
+            else ("CLAUDE", "No recent messages"),
+        }
 
 
 if __name__ == "__main__":
     transcript_path = sys.argv[1]
-    for role, content in get_interactions(transcript_path):
-        print(f"{role}:")
-        print(f"   {content}")
+    result = get_interactions(transcript_path)
+
+    # Display context messages
+    if result["context"]:
+        print("CONTEXT:")
+        for role, content in result["context"]:
+            print(f"  {role}: {content}")
         print()
+
+    # Display last message
+    print("LAST MESSAGE:")
+    role, content = result["last_message"]
+    print(f"  {role}: {content}")
+    print()

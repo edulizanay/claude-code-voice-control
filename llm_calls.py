@@ -9,28 +9,36 @@ client = Groq()
 
 
 def summarize_transcript(transcript_data):
-    """Summarize Claude Code actions from transcript data (existing functionality)"""
+    """Summarize Claude Code actions using structured transcript data"""
 
     if not transcript_data:
         return "No recent Claude activity to summarize"
 
-    # Prepare conversation for Groq
-    conversation_text = "\n".join(
-        [f"{role}: {content}" for role, content in transcript_data]
-    )
+    # Extract structured data
+    context = transcript_data.get("context", [])
+    last_message_tuple = transcript_data.get("last_message", ("CLAUDE", ""))
 
-    # Call Groq API
+    # Build context text
+    context_text = "\n".join([f"{role}: {content}" for role, content in context])
+
+    # Extract last message
+    _, last_message = last_message_tuple
+
+    # Call Groq API with your prompt template
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
                 {
-                    "role": "system",
-                    "content": "You are summarizing Claude Code AI assistant actions for voice control. Create a very brief summary (under 20 words) of what Claude just did for the user. Focus on the main action/task completed.",
-                },
-                {
                     "role": "user",
-                    "content": f"Summarize this Claude Code interaction:\n{conversation_text}",
+                    "content": f"""Hey, you are Claude Code. You are working with a user in a project together. Here are the last interactions or the conversation history:
+
+{context_text}
+
+And this is your last message:
+{last_message}
+
+Your objective is to summarize your last message in a few words, like "now i need to create  this file X to add the function for Y, or "let me run this bash command to find the missing key", or "great! all tests are passing".""",
                 },
             ],
             temperature=0.3,
@@ -40,29 +48,11 @@ def summarize_transcript(transcript_data):
         )
 
         summary = completion.choices[0].message.content
-        if summary:
-            return summary.strip()
-        else:
-            return "Claude completed a task"
+        return summary.strip() if summary else "I completed a task"
+
     except Exception:
-        # Fallback: simple keyword detection
-        claude_messages = [
-            content for role, content in transcript_data if role == "CLAUDE"
-        ]
-        if claude_messages:
-            first_claude_msg = claude_messages[0].lower()
-            if "function" in first_claude_msg:
-                return "Claude created a function"
-            elif "refactor" in first_claude_msg:
-                return "Claude refactored code"
-            elif "test" in first_claude_msg:
-                return "Claude wrote tests"
-            elif "debug" in first_claude_msg:
-                return "Claude debugged code"
-            else:
-                return "Claude completed a task"
-        else:
-            return "Claude completed a task"
+        # Simple fallback
+        return "I completed a task"
 
 
 def _extract_response_content(llm_response):
