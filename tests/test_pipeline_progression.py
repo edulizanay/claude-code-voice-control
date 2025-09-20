@@ -13,6 +13,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 from llm_calls import parse_voice_command, summarize_transcript
 from get_last_exchange import get_interactions
 from audio_generation import generate_audio
+from voice_transcription import capture_voice_command
 
 
 def test_pipeline_progression():
@@ -60,10 +61,24 @@ def test_pipeline_progression():
             print("❌ No transcript data found")
             return False
 
-        print(f"✅ Extracted {len(transcript_data)} messages:")
-        for role, content in transcript_data:
-            preview = content[:100] + "..." if len(content) > 100 else content
-            print(f"   {role}: {preview}")
+        # Display structured transcript data
+        context_count = len(transcript_data["context"])
+        last_message_role, _ = transcript_data["last_message"]
+        print(
+            f"✅ Extracted structured data: {context_count} context messages + 1 last message"
+        )
+
+        # Show context
+        if transcript_data["context"]:
+            print("   Context:")
+            for role, content in transcript_data["context"]:
+                preview = content[:80] + "..." if len(content) > 80 else content
+                print(f"     {role}: {preview}")
+
+        # Show last message
+        role, content = transcript_data["last_message"]
+        preview = content[:80] + "..." if len(content) > 80 else content
+        print(f"   Last Message: {role}: {preview}")
 
         # Generate summary
         print("\n🧠 Generating LLM summary...")
@@ -91,32 +106,17 @@ def test_pipeline_progression():
         return False
 
     # ========================================
-    # STEP 1: PROVEN WORKING - Audio Playback
+    # STEP 1: PROVEN WORKING - Real Voice Capture
     # ========================================
     print("\n" + "=" * 50)
-    print("🔊 STEP 1: AUDIO PLAYBACK (proven working)")
+    print("🎤 STEP 1: REAL VOICE CAPTURE")
     print("=" * 50)
-
-    message = "Claude finished processing. Please give your command like 'I approve this change' or 'No, reject this and instead do something else'. When done, say 'may the force be with you' to stop."
-    print(f"Playing: '{message}'")
-
-    start_time = time.time()
-    subprocess.run(["say", message])  # Blocks until audio finishes
-    audio_duration = time.time() - start_time
-
-    print(f"✅ Audio completed in {audio_duration:.2f}s")
-
-    # ========================================
-    # STEP 2: PROVEN WORKING - Voice Capture (SKIPPED FOR TESTING)
-    # ========================================
-    print("\n" + "=" * 50)
-    print("🎤 STEP 2: VOICE CAPTURE (skipped for testing)")
-    print("=" * 50)
-    print("Using mock transcript for testing pipeline...")
+    print("Listening for your voice command...")
+    print("Say 'may the force be with you' to stop recording.")
 
     try:
-        # Use mock transcript for testing
-        transcript = "approve this change"
+        # Use real voice capture with stop word detection
+        transcript = capture_voice_command()
 
         if not transcript:
             print("❌ Voice capture failed")
@@ -127,10 +127,10 @@ def test_pipeline_progression():
         print(f"   Length: {len(transcript)} characters")
 
         # ========================================
-        # STEP 3: PROVEN WORKING - LLM Classification
+        # STEP 2: PROVEN WORKING - LLM Classification
         # ========================================
         print("\n" + "=" * 50)
-        print("🧠 STEP 3: LLM CLASSIFICATION (proven working)")
+        print("🧠 STEP 2: LLM CLASSIFICATION (proven working)")
         print("=" * 50)
         print(f"Sending to LLM: '{transcript}'")
 
@@ -141,10 +141,10 @@ def test_pipeline_progression():
         print(f"   Original speech: '{original_speech}'")
 
         # ========================================
-        # STEP 4: PROVEN WORKING - TMUX Command Generation
+        # STEP 3: PROVEN WORKING - TMUX Command Generation
         # ========================================
         print("\n" + "=" * 50)
-        print("⌨️  STEP 4: TMUX COMMAND GENERATION (proven working)")
+        print("⌨️  STEP 3: TMUX COMMAND GENERATION (proven working)")
         print("=" * 50)
         print("📋 Command that WOULD be sent to tmux:")
 
