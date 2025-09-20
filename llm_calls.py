@@ -2,9 +2,11 @@
 # ABOUTME: Unified Groq API interface for LLM calls (summarization and command parsing)
 # ABOUTME: Handles transcript summarization and voice command parsing with fallback
 
+from dotenv import load_dotenv
 from groq import Groq
 
-
+# Load environment variables from .env file
+load_dotenv()
 client = Groq()
 
 
