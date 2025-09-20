@@ -28,91 +28,100 @@ def find_claude_session():
         return None
 
 
-def send_classified_command(classification, original_speech):
-    """Send command to Claude based on simple classification"""
+def send_classified_command(parsed_result):
+    """Send command to Claude based on parsed JSON result
+
+    Args:
+        parsed_result: Dict with {"action": "approve/reject/command", "text": "clean_text"}
+
+    Returns:
+        Dict with {"success": bool, "commands_sent": list, "error": str}
+    """
+
+    if not isinstance(parsed_result, dict) or "action" not in parsed_result:
+        return {"success": False, "error": "Invalid parsed result format"}
+
+    action = parsed_result["action"]
+    text = parsed_result.get("text", "")
 
     session_name = find_claude_session()
+    commands_sent = []
+
     if not session_name:
-        return False
+        return {"success": False, "error": "No Claude session found"}
 
     try:
-        if classification == "approve":
-            # Send Enter key
+        if action == "approve":
+            # Send Enter key only
+            commands_sent.append("Enter")
             result = subprocess.run(
                 ["tmux", "send-keys", "-t", session_name, "Enter"],
                 capture_output=True,
                 check=False,
             )
-            return result.returncode == 0
+            if result.returncode != 0:
+                return {"success": False, "error": "Failed to send Enter"}
 
-        elif classification == "approve_all":
-            # Send Shift+Tab (BTab is the correct tmux syntax)
-            result = subprocess.run(
-                ["tmux", "send-keys", "-t", session_name, "BTab"],
-                capture_output=True,
-                check=False,
-            )
-            return result.returncode == 0
+        elif action == "reject":
+            # Send Escape + cleaned text + Enter
+            commands_sent.extend(["Escape", f"text: {text}", "Enter"])
 
-        elif classification == "reject":
-            # Send Escape, then original speech, then Enter
-            # First send Escape
+            # Send Escape
             result1 = subprocess.run(
                 ["tmux", "send-keys", "-t", session_name, "Escape"],
                 capture_output=True,
                 check=False,
             )
             if result1.returncode != 0:
-                return False
+                return {"success": False, "error": "Failed to send Escape"}
 
-            # Then send the original speech text (prepend space to avoid cutting first char)
+            # Send cleaned text (prepend space to avoid cutting first char)
             result2 = subprocess.run(
-                ["tmux", "send-keys", "-t", session_name, " " + original_speech],
+                ["tmux", "send-keys", "-t", session_name, " " + text],
                 capture_output=True,
                 check=False,
             )
             if result2.returncode != 0:
-                return False
+                return {"success": False, "error": "Failed to send text"}
 
-            # Finally send Enter
+            # Send Enter
             result3 = subprocess.run(
                 ["tmux", "send-keys", "-t", session_name, "Enter"],
                 capture_output=True,
                 check=False,
             )
-            return result3.returncode == 0
+            if result3.returncode != 0:
+                return {"success": False, "error": "Failed to send Enter"}
 
-        elif classification == "single_escape":
-            # Send single Escape key
-            result = subprocess.run(
-                ["tmux", "send-keys", "-t", session_name, "Escape"],
-                capture_output=True,
-                check=False,
-            )
-            return result.returncode == 0
+        elif action == "command":
+            # Send cleaned text + Enter (for STOP events - new commands)
+            commands_sent.extend([f"text: {text}", "Enter"])
 
-        elif classification == "double_escape":
-            # Send double Escape (closes Claude Code)
+            # Send the command text (prepend space to avoid cutting first char)
             result1 = subprocess.run(
-                ["tmux", "send-keys", "-t", session_name, "Escape"],
+                ["tmux", "send-keys", "-t", session_name, " " + text],
                 capture_output=True,
                 check=False,
             )
             if result1.returncode != 0:
-                return False
+                return {"success": False, "error": "Failed to send command text"}
 
+            # Send Enter
             result2 = subprocess.run(
-                ["tmux", "send-keys", "-t", session_name, "Escape"],
+                ["tmux", "send-keys", "-t", session_name, "Enter"],
                 capture_output=True,
                 check=False,
             )
-            return result2.returncode == 0
+            if result2.returncode != 0:
+                return {"success": False, "error": "Failed to send Enter"}
 
-        else:  # unclear or unknown
-            return False
+        else:
+            return {"success": False, "error": f"Unknown action: {action}"}
 
-    except Exception:
-        return False
+        return {"success": True, "commands_sent": commands_sent}
+
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
 def get_claude_status():
