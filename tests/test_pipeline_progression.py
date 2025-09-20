@@ -14,9 +14,10 @@ from llm_calls import parse_voice_command, summarize_transcript
 from get_last_exchange import get_interactions
 from audio_generation import generate_audio
 from voice_transcription import capture_voice_command
+from tmux_controller import send_classified_command, find_claude_session
 
 
-def test_pipeline_progression():
+def test_pipeline_progression(real_tmux=False):
     """Test pipeline progression: what works + what we're adding"""
 
     print("=" * 70)
@@ -141,39 +142,42 @@ def test_pipeline_progression():
         print(f"   Original speech: '{original_speech}'")
 
         # ========================================
-        # STEP 3: PROVEN WORKING - TMUX Command Generation
+        # STEP 3: TMUX Command Execution
         # ========================================
         print("\n" + "=" * 50)
-        print("⌨️  STEP 3: TMUX COMMAND GENERATION (proven working)")
+        print("⌨️  STEP 3: TMUX COMMAND EXECUTION")
         print("=" * 50)
-        print("📋 Command that WOULD be sent to tmux:")
 
-        if classification == "approve":
-            print("   tmux send-keys -t claude-active Enter")
-            print("   → Would approve the current suggestion")
-        elif classification == "approve_all":
-            print("   tmux send-keys -t claude-active BTab")
-            print("   → Would approve all suggestions")
-        elif classification == "reject":
-            print("   tmux send-keys -t claude-active Escape")
-            print(f"   tmux send-keys -t claude-active ' {original_speech}'")
-            print("   tmux send-keys -t claude-active Enter")
-            print("   → Would reject and send your alternative")
-        elif classification == "single_escape":
-            print("   tmux send-keys -t claude-active Escape")
-            print("   → Would send single escape")
-        elif classification == "double_escape":
-            print("   tmux send-keys -t claude-active Escape")
-            print("   tmux send-keys -t claude-active Escape")
-            print("   → Would exit Claude Code")
+        # Check Claude session first
+        print("🔍 Checking for Claude Code session...")
+        session_name = find_claude_session()
+        if not session_name:
+            print("❌ No Claude Code session found!")
+            print('Start Claude Code with: tmux new-session -s claude-active "claude"')
+            return False
+
+        print(f"✅ Found Claude session: {session_name}")
+
+        if real_tmux:
+            print("\n🚀 EXECUTING REAL TMUX COMMAND:")
+            print(f"   Classification: {classification}")
+            print(f"   Original speech: '{original_speech}'")
+
+            try:
+                success = send_classified_command(classification, original_speech)
+                if success:
+                    print("✅ Command executed successfully!")
+                else:
+                    print("❌ Command execution failed")
+                    return False
+            except Exception as e:
+                print(f"❌ Execution error: {e}")
+                return False
         else:
-            print("   (no command - unclear classification)")
-            print("   → Would do nothing")
-
-        print("\n🎯 MOCK EXECUTION (not actually sent):")
-        print("   Session: claude-active")
-        print(f"   Classification: {classification}")
-        print(f"   Original: {original_speech}")
+            print("\n🎯 MOCK MODE (not actually sent):")
+            print(f"   Would execute: {classification}")
+            print(f"   With text: '{original_speech}'")
+            print("   (Use real_tmux=True to execute)")
 
         return True
 

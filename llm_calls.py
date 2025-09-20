@@ -2,9 +2,12 @@
 # ABOUTME: Unified Groq API interface for LLM calls (summarization and command parsing)
 # ABOUTME: Handles transcript summarization and voice command parsing with fallback
 
+import json
+from dotenv import load_dotenv
 from groq import Groq
 
-
+# Load environment variables from .env file
+load_dotenv()
 client = Groq()
 
 
@@ -79,60 +82,93 @@ def _extract_response_content(llm_response):
         return None
 
 
-def parse_voice_command(speech_text):
-    """Classify voice command into simple action categories"""
+def parse_voice_command(speech_text, event_type="notification"):
+    """Parse voice commands with context-aware prompts for notification and stop events"""
 
     if not speech_text or not speech_text.strip():
-        return ("unclear", speech_text)
+        return {"action": "unclear", "text": speech_text}
 
     original_speech = speech_text.strip()
 
-    # Call Groq API for simple classification
+    # Choose prompt based on event type
+    if event_type == "notification":
+        system_prompt = """You are parsing voice commands when Claude Code is waiting for approval/rejection.
+
+Context: Claude just made a suggestion and is waiting for user response.
+
+Categories:
+- 'approve': user agrees (→ send Enter key only)
+- 'reject': user disagrees and gives alternative (→ send Escape + alternative text + Enter)
+
+<thinking>
+1. Is the user agreeing or disagreeing with Claude's suggestion?
+2. If disagreeing, what alternative text should be sent to Claude?
+3. Remove filler words like "no", "instead", "reject", "actually", "nah" from the actionable text.
+4. Ignore any "and then" future commands - focus only on the current approval/rejection.
+</thinking>
+
+<response>
+Return JSON format:
+For approval: {"action": "approve"}
+For rejection: {"action": "reject", "text": "clean alternative text"}
+For unclear: {"action": "unclear"}
+</response>"""
+
+    else:  # event_type == "stop"
+        system_prompt = """You are parsing voice commands when Claude Code is ready for new input.
+
+Context: Claude finished a task and is ready for the next command.
+
+Categories:
+- 'command': user gives new instruction (→ send text + Enter)
+
+<thinking>
+1. What command does the user want to send to Claude?
+2. Clean up the text but preserve the core instruction.
+3. Remove hesitation words like "hmm", "maybe", "um", "actually", "you know what" but keep the actual command.
+4. Remove temporal words like "now", "let's", "go ahead and" but keep the action.
+</thinking>
+
+<response>
+Return JSON format:
+For command: {"action": "command", "text": "clean command text"}
+For unclear: {"action": "unclear"}
+</response>"""
     try:
         completion = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
-                {
-                    "role": "system",
-                    "content": """You are a voice command classifier. You are listening to a conversation between a user and a Claude Code AI assistant. You are given a voice command and you need to classify it into one of the following categories:
-- 'approve': when the user agrees with the current suggestion
-- 'approve_all': when the user agrees with all suggestions
-- 'reject': when the user disagrees with the current suggestion
-
-<thinking>
-Analyze the voice command here. Consider:
-- Is the user expressing agreement or disagreement?
-- What keywords or phrases indicate their intent?
-</thinking>
-
-<response>
-[Return ONLY one of: approve, approve_all, or reject]
-</response>""",
-                },
+                {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Voice: {original_speech}"},
             ],
             temperature=0.1,
-            max_completion_tokens=250,
+            max_completion_tokens=300,
             top_p=1,
             stream=False,
         )
 
-        # Extract content from <response> tags, or use direct response
+        # Extract content from response
         full_response = completion.choices[0].message.content
-        response = _extract_response_content(full_response)
 
-        # If no structured response found, try using the raw response
-        if not response:
-            response = full_response.strip().lower()
+        # Try to parse JSON from response
+        try:
+            # Look for JSON in the response
+            start_idx = full_response.find("{")
+            end_idx = full_response.rfind("}") + 1
+            if start_idx != -1 and end_idx > start_idx:
+                json_str = full_response[start_idx:end_idx]
+                result = json.loads(json_str)
+                result["original_speech"] = original_speech
+                return result
+        except json.JSONDecodeError:
+            pass
 
-        # Trust the LLM response - if it's not a valid category, mark as unclear
-        if response and response in ["approve", "approve_all", "reject"]:
-            return (response, original_speech)
-        else:
-            return ("unclear", original_speech)
+        # Fallback to unclear if JSON parsing fails
+        return {"action": "unclear", "text": original_speech}
 
-    except Exception:
-        return ("unclear", original_speech)
+    except Exception as e:
+        print(f"Error: {e}")
+        return {"action": "unclear", "text": original_speech}
 
 
 # Backward compatibility - keep existing function name

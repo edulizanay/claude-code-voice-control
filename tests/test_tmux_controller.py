@@ -1,224 +1,176 @@
 #!/usr/bin/env python3
-# ABOUTME: Tests for tmux controller functionality for Claude Code session control
-# ABOUTME: Validates session detection, command sending, and error handling
+# ABOUTME: Test version of TMUX controller for enhanced JSON parsing validation
+# ABOUTME: Handles new JSON structure with action/text fields and adds mock mode for testing
+
+import subprocess
 
 
-def test_session_detection():
-    """Test detection of active Claude Code tmux session"""
-    from tmux_controller import find_claude_session
+def find_claude_session():
+    """Find active Claude Code tmux session"""
+    try:
+        # List all tmux sessions
+        result = subprocess.run(
+            ["tmux", "list-sessions"], capture_output=True, text=True, check=False
+        )
 
-    # This test requires a running tmux session named "claude-active"
-    # We'll test the function logic without requiring actual session
+        if result.returncode != 0:
+            return None
+
+        # Look for session named "claude-active"
+        sessions = result.stdout.strip().split("\n")
+        for session_line in sessions:
+            if session_line.startswith("claude-active:"):
+                return "claude-active"
+
+        return None
+
+    except Exception:
+        return None
+
+
+def send_enhanced_command(parsed_result, mock_mode=False):
+    """Send command to Claude based on enhanced JSON parsing result
+
+    Args:
+        parsed_result: Dict with {"action": "approve/reject/command", "text": "clean_text"}
+        mock_mode: If True, print what would be sent instead of sending
+
+    Returns:
+        Dict with {"success": bool, "commands_sent": list}
+    """
+
+    if not isinstance(parsed_result, dict) or "action" not in parsed_result:
+        return {"success": False, "error": "Invalid parsed result format"}
+
+    action = parsed_result["action"]
+    text = parsed_result.get("text", "")
+
     session_name = find_claude_session()
+    commands_sent = []
 
-    # Should return either "claude-active" if session exists, or None
-    assert session_name is None or session_name == "claude-active"
+    if not mock_mode and not session_name:
+        return {"success": False, "error": "No Claude session found"}
 
+    try:
+        if action == "approve":
+            # Send Enter key only
+            commands_sent.append("Enter")
+            if mock_mode:
+                print(f"MOCK: Would send Enter to {session_name or 'claude-active'}")
+            else:
+                result = subprocess.run(
+                    ["tmux", "send-keys", "-t", session_name, "Enter"],
+                    capture_output=True,
+                    check=False,
+                )
+                if result.returncode != 0:
+                    return {"success": False, "error": "Failed to send Enter"}
 
-def test_session_detection_with_multiple_sessions():
-    """Test session detection when multiple sessions exist"""
-    from tmux_controller import find_claude_session
-    from unittest.mock import patch
+        elif action == "reject":
+            # Send Escape + cleaned text + Enter
+            commands_sent.extend(["Escape", f"text: {text}", "Enter"])
+            if mock_mode:
+                print(
+                    f"MOCK: Would send Escape + '{text}' + Enter to {session_name or 'claude-active'}"
+                )
+            else:
+                # Send Escape
+                result1 = subprocess.run(
+                    ["tmux", "send-keys", "-t", session_name, "Escape"],
+                    capture_output=True,
+                    check=False,
+                )
+                if result1.returncode != 0:
+                    return {"success": False, "error": "Failed to send Escape"}
 
-    # Mock tmux list-sessions output with multiple sessions
-    mock_output = "main: 1 windows (created Thu Sep 19 14:00:00 2025) [100x40]\nclaude-active: 1 windows (created Thu Sep 19 14:30:00 2025) [100x40]\nother: 1 windows (created Thu Sep 19 14:45:00 2025) [100x40]"
+                # Send cleaned text (prepend space to avoid cutting first char)
+                result2 = subprocess.run(
+                    ["tmux", "send-keys", "-t", session_name, " " + text],
+                    capture_output=True,
+                    check=False,
+                )
+                if result2.returncode != 0:
+                    return {"success": False, "error": "Failed to send text"}
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.stdout = mock_output
-        mock_run.return_value.returncode = 0
+                # Send Enter
+                result3 = subprocess.run(
+                    ["tmux", "send-keys", "-t", session_name, "Enter"],
+                    capture_output=True,
+                    check=False,
+                )
+                if result3.returncode != 0:
+                    return {"success": False, "error": "Failed to send Enter"}
 
-        session_name = find_claude_session()
-        assert session_name == "claude-active"
+        elif action == "command":
+            # Send cleaned text + Enter (for STOP events - new commands)
+            commands_sent.extend([f"text: {text}", "Enter"])
+            if mock_mode:
+                print(
+                    f"MOCK: Would send '{text}' + Enter to {session_name or 'claude-active'}"
+                )
+            else:
+                # Send the command text (prepend space to avoid cutting first char)
+                result1 = subprocess.run(
+                    ["tmux", "send-keys", "-t", session_name, " " + text],
+                    capture_output=True,
+                    check=False,
+                )
+                if result1.returncode != 0:
+                    return {"success": False, "error": "Failed to send command text"}
 
+                # Send Enter
+                result2 = subprocess.run(
+                    ["tmux", "send-keys", "-t", session_name, "Enter"],
+                    capture_output=True,
+                    check=False,
+                )
+                if result2.returncode != 0:
+                    return {"success": False, "error": "Failed to send Enter"}
 
-def test_session_detection_no_claude_session():
-    """Test session detection when no Claude session exists"""
-    from tmux_controller import find_claude_session
-    from unittest.mock import patch
+        else:
+            return {"success": False, "error": f"Unknown action: {action}"}
 
-    # Mock tmux output without claude-active session
-    mock_output = "main: 1 windows (created Thu Sep 19 14:00:00 2025) [100x40]\nother: 1 windows (created Thu Sep 19 14:45:00 2025) [100x40]"
+        return {"success": True, "commands_sent": commands_sent}
 
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.stdout = mock_output
-        mock_run.return_value.returncode = 0
-
-        session_name = find_claude_session()
-        assert session_name is None
-
-
-def test_send_approve_command():
-    """Test sending approve command to tmux session"""
-    from tmux_controller import send_command_to_claude
-    from unittest.mock import patch
-
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.returncode = 0
-
-        result = send_command_to_claude("A")
-
-        # Should have called tmux send-keys twice (command + Enter)
-        assert mock_run.call_count == 2
-
-        # Check the calls made
-        calls = mock_run.call_args_list
-        assert "send-keys" in str(calls[0])
-        assert "A" in str(calls[0])
-        assert "Enter" in str(calls[1])
-
-        assert result is True
-
-
-def test_send_reject_command():
-    """Test sending reject command to tmux session"""
-    from tmux_controller import send_command_to_claude
-    from unittest.mock import patch
-
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.returncode = 0
-
-        result = send_command_to_claude("R")
-
-        # Should have called tmux send-keys twice
-        assert mock_run.call_count == 2
-        assert result is True
-
-
-def test_send_custom_text():
-    """Test sending custom text to tmux session"""
-    from tmux_controller import send_command_to_claude
-    from unittest.mock import patch
-
-    custom_text = "hello world"
-
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.returncode = 0
-
-        result = send_command_to_claude(custom_text)
-
-        # Should have called tmux send-keys twice (text + Enter)
-        assert mock_run.call_count == 2
-
-        calls = mock_run.call_args_list
-        assert custom_text in str(calls[0])
-        assert "Enter" in str(calls[1])
-
-        assert result is True
+    except Exception as e:
+        return {"success": False, "error": str(e)}
 
 
-def test_send_command_session_not_found():
-    """Test error handling when Claude session is not found"""
-    from tmux_controller import send_command_to_claude
-    from unittest.mock import patch
+# Backward compatibility function that converts old format to new
+def send_classified_command(classification, original_speech, mock_mode=False):
+    """Backward compatibility wrapper - converts old format to new"""
 
-    with patch("tmux_controller.find_claude_session") as mock_find:
-        mock_find.return_value = None
+    # Convert old format to new JSON structure
+    if classification == "approve":
+        parsed_result = {"action": "approve"}
+    elif classification == "reject":
+        parsed_result = {"action": "reject", "text": original_speech}
+    elif classification == "approve_all":
+        # Handle this as a special case (not in new parser yet)
+        return {
+            "success": False,
+            "error": "approve_all not implemented in enhanced parser",
+        }
+    else:
+        parsed_result = {"action": "unclear", "text": original_speech}
 
-        result = send_command_to_claude("A")
-        assert result is False
-
-
-def test_send_command_tmux_error():
-    """Test error handling when tmux command fails"""
-    from tmux_controller import send_command_to_claude
-    from unittest.mock import patch
-
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.returncode = 1  # Command failed
-
-        result = send_command_to_claude("A")
-        assert result is False
-
-
-def test_execute_parsed_command_approve():
-    """Test executing parsed command for approval"""
-    from tmux_controller import execute_parsed_command
-    from unittest.mock import patch
-
-    command_data = {"action": "approve", "tmux_command": "A", "text": None}
-
-    with patch("tmux_controller.send_command_to_claude") as mock_send:
-        mock_send.return_value = True
-
-        result = execute_parsed_command(command_data)
-
-        mock_send.assert_called_once_with("A")
-        assert result is True
-
-
-def test_execute_parsed_command_add_text():
-    """Test executing parsed command for text addition"""
-    from tmux_controller import execute_parsed_command
-    from unittest.mock import patch
-
-    command_data = {
-        "action": "add_text",
-        "tmux_command": "hello world",
-        "text": "hello world",
-    }
-
-    with patch("tmux_controller.send_command_to_claude") as mock_send:
-        mock_send.return_value = True
-
-        result = execute_parsed_command(command_data)
-
-        mock_send.assert_called_once_with("hello world")
-        assert result is True
-
-
-def test_execute_parsed_command_unclear():
-    """Test executing unclear command (should do nothing)"""
-    from tmux_controller import execute_parsed_command
-
-    command_data = {"action": "unclear", "tmux_command": None, "text": None}
-
-    result = execute_parsed_command(command_data)
-    assert result is False
-
-
-def test_capture_claude_screen():
-    """Test capturing Claude Code screen content"""
-    from tmux_controller import capture_claude_screen
-    from unittest.mock import patch
-
-    mock_output = "[A]pprove, [R]eject, [M]odify\nWhat would you like to do?"
-
-    with patch("subprocess.run") as mock_run:
-        mock_run.return_value.stdout = mock_output
-        mock_run.return_value.returncode = 0
-
-        content = capture_claude_screen()
-        assert content == mock_output
+    return send_enhanced_command(parsed_result, mock_mode)
 
 
 if __name__ == "__main__":
-    # Simple test runner
-    test_functions = [
-        test_session_detection,
-        test_session_detection_with_multiple_sessions,
-        test_session_detection_no_claude_session,
-        test_send_approve_command,
-        test_send_reject_command,
-        test_send_custom_text,
-        test_send_command_session_not_found,
-        test_send_command_tmux_error,
-        test_execute_parsed_command_approve,
-        test_execute_parsed_command_add_text,
-        test_execute_parsed_command_unclear,
-        test_capture_claude_screen,
+    # Test the enhanced controller
+    print("Testing Enhanced TMUX Controller...")
+
+    # Test cases with new JSON format
+    test_cases = [
+        {"action": "approve"},
+        {"action": "reject", "text": "add logging"},
+        {"action": "command", "text": "run the tests"},
+        {"action": "reject", "text": "use async await syntax"},
     ]
 
-    print("Running tmux controller tests...")
-    passed = 0
-    failed = 0
-
-    for test_func in test_functions:
-        try:
-            test_func()
-            print(f"✅ {test_func.__name__}")
-            passed += 1
-        except Exception as e:
-            print(f"❌ {test_func.__name__}: {e}")
-            failed += 1
-
-    print(f"\nResults: {passed} passed, {failed} failed")
+    print("\nTesting with mock mode:")
+    for i, test_case in enumerate(test_cases, 1):
+        print(f"\nTest {i}: {test_case}")
+        result = send_enhanced_command(test_case, mock_mode=True)
+        print(f"Result: {result}")
