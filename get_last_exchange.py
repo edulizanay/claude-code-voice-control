@@ -8,6 +8,7 @@ from pathlib import Path
 
 
 def get_interactions(transcript_path):
+    """Get structured conversation data: context + last message"""
     transcript_path = Path(transcript_path)
 
     entries = []
@@ -38,19 +39,63 @@ def get_interactions(transcript_path):
             and entry.get("message", {}).get("role") == "user"
         ):
             content = entry.get("message", {}).get("content", "")
+            user_text = ""
+
             if isinstance(content, str) and content.strip():
-                messages.append(("USER", content))
+                # Direct string content
+                user_text = content
+            elif isinstance(content, list):
+                # Extract text from tool results or other content items
+                for item in content:
+                    if item.get("type") == "tool_result":
+                        tool_content = item.get("content", "")
+                        if tool_content and tool_content.strip():
+                            user_text = tool_content
+                            break
+                    elif item.get("type") == "text":
+                        text_content = item.get("text", "")
+                        if text_content and text_content.strip():
+                            user_text = text_content
+                            break
+
+            if user_text:
+                messages.append(("USER", user_text))
 
         if len(messages) >= 3:
             break
 
     messages.reverse()
-    return messages[-3:]
+    last_three = messages[-3:]
+
+    # Structure the data: context (first 2) + last message
+    if len(last_three) >= 3:
+        return {
+            "context": last_three[:2],  # First Claude + User
+            "last_message": last_three[2],  # Last Claude message
+        }
+    else:
+        # Fallback for insufficient messages
+        return {
+            "context": last_three[:-1] if len(last_three) > 1 else [],
+            "last_message": last_three[-1]
+            if last_three
+            else ("CLAUDE", "No recent messages"),
+        }
 
 
 if __name__ == "__main__":
     transcript_path = sys.argv[1]
-    for role, content in get_interactions(transcript_path):
-        print(f"{role}:")
-        print(f"   {content}")
+    result = get_interactions(transcript_path)
+
+    # Display context messages
+    if result["context"]:
+        print("CONTEXT:")
+        for role, content in result["context"]:
+            print(f"  {role}: {content}")
         print()
+
+    # Display last message
+    print("LAST MESSAGE:")
+    role, content = result["last_message"]
+    print(f"  {role}: {content}")
+    print()
