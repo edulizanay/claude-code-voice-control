@@ -6,7 +6,7 @@ import json
 import sys
 import subprocess
 from get_last_exchange import get_interactions
-from transcript_summary import summarize_claude_actions
+from llm_calls import summarize_claude_actions
 from audio_generation import generate_audio
 
 

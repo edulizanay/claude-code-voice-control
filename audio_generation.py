@@ -1,17 +1,55 @@
 #!/usr/bin/env python3
-# ABOUTME: Generates audio files from summary text using Grok TTS API
+# ABOUTME: Generates audio files from summary text with Groq TTS primary and OpenAI fallback
 # ABOUTME: Creates WAV files for voice control playback of Claude Code summaries
 
 from groq import Groq
+import openai
 from pathlib import Path
 import datetime
+from dotenv import load_dotenv
+
+# Load environment variables
+load_dotenv()
+
+# Initialize TTS clients
+groq_client = Groq()
+openai_client = openai.OpenAI()
 
 
-client = Groq()
+def _generate_groq_audio(summary_text, output_path):
+    """Generate audio using Groq TTS API"""
+    response = groq_client.audio.speech.create(
+        model="playai-tts",
+        voice="Aaliyah-PlayAI",
+        response_format="wav",
+        input=summary_text,
+    )
+    response.write_to_file(output_path)
+    return output_path
+
+
+def _generate_openai_audio(summary_text, output_path):
+    """Generate audio using OpenAI TTS API as fallback"""
+    with openai_client.audio.speech.with_streaming_response.create(
+        model="tts-1",
+        voice="alloy",  
+        input=summary_text,
+        response_format="wav",
+    ) as response:
+        response.stream_to_file(output_path)
+    return output_path
+
+
+def _generate_fallback_wav(output_path):
+    """Generate minimal silent WAV file as last resort"""
+    with open(output_path, "wb") as f:
+        wav_header = b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00D\xac\x00\x00\x88X\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
+        f.write(wav_header)
+    return output_path
 
 
 def generate_audio(summary_text, output_directory="."):
-    """Generate audio file from summary text using Grok TTS"""
+    """Generate audio file with fallback hierarchy: Groq → OpenAI → Silent WAV"""
 
     if not summary_text:
         raise ValueError("Summary text cannot be empty")
@@ -20,19 +58,20 @@ def generate_audio(summary_text, output_directory="."):
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     output_path = output_dir / f"claude_summary_{timestamp}.wav"
 
-    # Call Grok TTS API
+    # Try Groq TTS first
     try:
-        response = client.audio.speech.create(
-            model="playai-tts",
-            voice="Aaliyah-PlayAI",
-            response_format="wav",
-            input=summary_text,
-        )
-        response.write_to_file(output_path)
-    except Exception:
-        # Create minimal WAV file as fallback
-        with open(output_path, "wb") as f:
-            wav_header = b"RIFF$\x00\x00\x00WAVEfmt \x10\x00\x00\x00\x01\x00\x01\x00D\xac\x00\x00\x88X\x01\x00\x02\x00\x10\x00data\x00\x00\x00\x00"
-            f.write(wav_header)
+        print("🎵 Trying Groq TTS...")
+        return _generate_groq_audio(summary_text, output_path)
+    except Exception as groq_error:
+        print(f"⚠️  Groq TTS failed: {groq_error}")
 
-    return output_path
+        # Fallback to OpenAI TTS
+        try:
+            print("🎵 Trying OpenAI TTS fallback...")
+            return _generate_openai_audio(summary_text, output_path)
+        except Exception as openai_error:
+            print(f"⚠️  OpenAI TTS failed: {openai_error}")
+
+            # Final fallback to silent WAV
+            print("🔇 Using silent WAV fallback...")
+            return _generate_fallback_wav(output_path)

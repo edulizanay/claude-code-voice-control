@@ -3,7 +3,6 @@
 # ABOUTME: Handles transcript summarization and voice command parsing with fallback
 
 from groq import Groq
-import re
 
 
 client = Groq()
@@ -66,6 +65,30 @@ def summarize_transcript(transcript_data):
             return "Claude completed a task"
 
 
+def _extract_response_content(llm_response):
+    """Extract content from <response> tags in LLM output"""
+    try:
+        # Find content between <response> and </response> tags
+        start_tag = "<response>"
+        end_tag = "</response>"
+
+        start_idx = llm_response.find(start_tag)
+        if start_idx == -1:
+            return None
+
+        start_idx += len(start_tag)
+        end_idx = llm_response.find(end_tag, start_idx)
+        if end_idx == -1:
+            return None
+
+        # Extract and clean the content
+        content = llm_response[start_idx:end_idx].strip()
+        return content.lower() if content else None
+
+    except Exception:
+        return None
+
+
 def parse_voice_command(speech_text):
     """Classify voice command into simple action categories"""
 
@@ -81,58 +104,45 @@ def parse_voice_command(speech_text):
             messages=[
                 {
                     "role": "system",
-                    "content": "Return only: 'approve', 'approve_all', 'reject', or 'unclear'",
+                    "content": """You are a voice command classifier. You are listening to a conversation between a user and a Claude Code AI assistant. You are given a voice command and you need to classify it into one of the following categories:
+- 'approve': when the user agrees with the current suggestion
+- 'approve_all': when the user agrees with all suggestions
+- 'reject': when the user disagrees with the current suggestion
+
+<thinking>
+Analyze the voice command here. Consider:
+- Is the user expressing agreement or disagreement?
+- What keywords or phrases indicate their intent?
+</thinking>
+
+<response>
+[Return ONLY one of: approve, approve_all, or reject]
+</response>""",
                 },
                 {"role": "user", "content": f"Voice: {original_speech}"},
             ],
             temperature=0.1,
-            max_completion_tokens=50,
+            max_completion_tokens=250,
             top_p=1,
             stream=False,
         )
 
-        response = completion.choices[0].message.content.strip().lower()
+        # Extract content from <response> tags, or use direct response
+        full_response = completion.choices[0].message.content
+        response = _extract_response_content(full_response)
 
-        # Validate response is one of expected categories
-        if response in ["approve", "approve_all", "reject", "unclear"]:
+        # If no structured response found, try using the raw response
+        if not response:
+            response = full_response.strip().lower()
+
+        # Trust the LLM response - if it's not a valid category, mark as unclear
+        if response and response in ["approve", "approve_all", "reject"]:
             return (response, original_speech)
         else:
-            # If unexpected response, fall through to fallback
-            pass
+            return ("unclear", original_speech)
 
     except Exception:
-        pass
-
-    # Fallback: Simple keyword matching
-    return _fallback_classification(original_speech)
-
-
-def _fallback_classification(speech_text):
-    """Fallback classification using simple keyword matching"""
-
-    speech_lower = speech_text.lower()
-
-    # Check for approve_all keywords
-    approve_all_keywords = ["approve all", "accept all", "ok all", "yes all"]
-    for keyword in approve_all_keywords:
-        if keyword in speech_lower:
-            return ("approve_all", speech_text)
-
-    # Check for approval keywords as whole words
-    approve_keywords = ["approve", "yes", "accept", "ok", "okay"]
-    for keyword in approve_keywords:
-        # Use word boundaries for exact matching
-        if re.search(r"\b" + re.escape(keyword) + r"\b", speech_lower):
-            return ("approve", speech_text)
-
-    # Check for rejection keywords (must be exact words or at start)
-    reject_keywords = ["reject", "no", "decline", "cancel", "deny"]
-    for keyword in reject_keywords:
-        if speech_lower == keyword or speech_lower.startswith(keyword + " "):
-            return ("reject", speech_text)
-
-    # Default to unclear if no patterns match
-    return ("unclear", speech_text)
+        return ("unclear", original_speech)
 
 
 # Backward compatibility - keep existing function name
