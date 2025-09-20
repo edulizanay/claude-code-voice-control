@@ -38,8 +38,27 @@ def get_interactions(transcript_path):
             and entry.get("message", {}).get("role") == "user"
         ):
             content = entry.get("message", {}).get("content", "")
+            user_text = ""
+
             if isinstance(content, str) and content.strip():
-                messages.append(("USER", content))
+                # Direct string content
+                user_text = content
+            elif isinstance(content, list):
+                # Extract text from tool results or other content items
+                for item in content:
+                    if item.get("type") == "tool_result":
+                        tool_content = item.get("content", "")
+                        if tool_content and tool_content.strip():
+                            user_text = tool_content
+                            break
+                    elif item.get("type") == "text":
+                        text_content = item.get("text", "")
+                        if text_content and text_content.strip():
+                            user_text = text_content
+                            break
+
+            if user_text:
+                messages.append(("USER", user_text))
 
         if len(messages) >= 3:
             break
