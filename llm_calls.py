@@ -104,7 +104,6 @@ Categories:
 1. Is the user agreeing or disagreeing with Claude's suggestion?
 2. If disagreeing, what alternative text should be sent to Claude?
 3. Remove filler words like "no", "instead", "reject", "actually", "nah" from the actionable text.
-4. Ignore any "and then" future commands - focus only on the current approval/rejection.
 </thinking>
 
 <response>
@@ -134,8 +133,10 @@ Return JSON format:
 For command: {"action": "command", "text": "clean command text"}
 For unclear: {"action": "unclear"}
 </response>"""
-
     try:
+        print(f"🔍 DEBUG: Using event_type='{event_type}'")
+        print(f"🔍 DEBUG: Input speech: '{original_speech}'")
+
         completion = client.chat.completions.create(
             model="openai/gpt-oss-120b",
             messages=[
@@ -150,6 +151,7 @@ For unclear: {"action": "unclear"}
 
         # Extract content from response
         full_response = completion.choices[0].message.content
+        print(f"🔍 DEBUG: Full LLM response: '{full_response}'")
 
         # Try to parse JSON from response
         try:
@@ -158,17 +160,22 @@ For unclear: {"action": "unclear"}
             end_idx = full_response.rfind("}") + 1
             if start_idx != -1 and end_idx > start_idx:
                 json_str = full_response[start_idx:end_idx]
+                print(f"🔍 DEBUG: Extracted JSON string: '{json_str}'")
                 result = json.loads(json_str)
                 result["original_speech"] = original_speech
+                print(f"🔍 DEBUG: Parsed result: {result}")
                 return result
-        except json.JSONDecodeError:
-            pass
+            else:
+                print("🔍 DEBUG: No JSON found in response")
+        except json.JSONDecodeError as e:
+            print(f"🔍 DEBUG: JSON parsing failed: {e}")
 
         # Fallback to unclear if JSON parsing fails
+        print("🔍 DEBUG: Falling back to unclear")
         return {"action": "unclear", "text": original_speech}
 
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"🔍 DEBUG: API Error: {e}")
         return {"action": "unclear", "text": original_speech}
 
 
