@@ -19,8 +19,7 @@
           "hooks": [
             {
               "type": "command",
-              "command": 
-  "/Users/eduardolizana/Documents/Github/claude-code-voice-control/claude_voice_hook.sh notification"
+              "command": "/Users/eduardolizana/Documents/Github/claude-code-voice-control/claude_voice_hook.sh notification"
             }
           ]
         }
@@ -31,8 +30,7 @@
           "hooks": [
             {
               "type": "command",
-              "command": 
-  "/Users/eduardolizana/Documents/Github/claude-code-voice-control/claude_voice_hook.sh stop"
+              "command": "/Users/eduardolizana/Documents/Github/claude-code-voice-control/claude_voice_hook.sh stop"
             }
           ]
         }

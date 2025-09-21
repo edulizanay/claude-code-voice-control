@@ -3,6 +3,19 @@
 # ABOUTME: Handles session detection and 5 command types: approve, approve_all, reject, single_escape, double_escape
 
 import subprocess
+import yaml
+from pathlib import Path
+
+
+# Load configuration
+def _load_config():
+    """Load configuration from config.yaml file"""
+    config_path = Path(__file__).parent / "config.yaml"
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f)
+
+
+CONFIG = _load_config()
 
 
 def find_claude_session():
@@ -16,11 +29,12 @@ def find_claude_session():
         if result.returncode != 0:
             return None
 
-        # Look for session named "claude-active"
+        # Look for session with configured name
+        session_name = CONFIG["tmux"]["session_name"]
         sessions = result.stdout.strip().split("\n")
         for session_line in sessions:
-            if session_line.startswith("claude-active:"):
-                return "claude-active"
+            if session_line.startswith(f"{session_name}:"):
+                return session_name
 
         return None
 
@@ -132,20 +146,3 @@ def get_claude_status():
         return {"session_found": False}
 
     return {"session_found": True}
-
-
-if __name__ == "__main__":
-    # Test the controller
-    print("Testing TMUX controller...")
-
-    # Check session
-    session = find_claude_session()
-    print(f"Claude session: {session}")
-
-    if session:
-        # Get status
-        status = get_claude_status()
-        print(f"Session found: {status['session_found']}")
-    else:
-        print("No Claude session found. Start Claude Code with:")
-        print('tmux new-session -s claude-active "claude"')

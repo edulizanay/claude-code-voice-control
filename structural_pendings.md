@@ -40,3 +40,5 @@ Core developments to implement after integrating the whole pipeline:
 
 
 Make it so I can activate this for all my sessions, but also I can deactivate it in each session. 
+
+Create some UI to let the user know that they are speaking to the while this is active or show that this is active. 
