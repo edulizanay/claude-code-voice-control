@@ -3,7 +3,6 @@
 # ABOUTME: Returns exactly 3 messages with just the content, no fluff
 
 import json
-import sys
 from pathlib import Path
 
 
@@ -81,21 +80,3 @@ def get_interactions(transcript_path):
             if last_three
             else ("CLAUDE", "No recent messages"),
         }
-
-
-if __name__ == "__main__":
-    transcript_path = sys.argv[1]
-    result = get_interactions(transcript_path)
-
-    # Display context messages
-    if result["context"]:
-        print("CONTEXT:")
-        for role, content in result["context"]:
-            print(f"  {role}: {content}")
-        print()
-
-    # Display last message
-    print("LAST MESSAGE:")
-    role, content = result["last_message"]
-    print(f"  {role}: {content}")
-    print()

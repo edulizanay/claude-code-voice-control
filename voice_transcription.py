@@ -7,6 +7,8 @@ import websocket
 import json
 import threading
 import time
+import yaml
+from pathlib import Path
 from urllib.parse import urlencode
 from dotenv import load_dotenv
 import os
@@ -15,22 +17,30 @@ import os
 load_dotenv()
 YOUR_API_KEY = os.getenv("ASSEMBLYAI_API_KEY")
 
-# Configuration
-CONNECTION_PARAMS = {
-    "sample_rate": 16000,
-    "format_turns": True,
-}
+
+# Load configuration
+def _load_config():
+    """Load configuration from config.yaml file"""
+    config_path = Path(__file__).parent / "config.yaml"
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f)
+
+
+CONFIG = _load_config()
+
+# Configuration from config.yaml
+CONNECTION_PARAMS = CONFIG["voice"]["connection_params"]
 API_ENDPOINT_BASE_URL = "wss://streaming.assemblyai.com/v3/ws"
 API_ENDPOINT = f"{API_ENDPOINT_BASE_URL}?{urlencode(CONNECTION_PARAMS)}"
 
-# Audio Configuration
-FRAMES_PER_BUFFER = 800  # 50ms of audio
+# Audio Configuration from config.yaml
+FRAMES_PER_BUFFER = CONFIG["voice"]["audio"]["frames_per_buffer"]
 SAMPLE_RATE = CONNECTION_PARAMS["sample_rate"]
-CHANNELS = 1
-FORMAT = pyaudio.paInt16
+CHANNELS = CONFIG["voice"]["audio"]["channels"]
+FORMAT = getattr(pyaudio, CONFIG["voice"]["audio"]["format"])
 
-# Stop keyword
-STOP_KEYWORD = "may the force be with you"
+# Stop keyword from config.yaml
+STOP_KEYWORD = CONFIG["voice"]["stop_keyword"]
 
 
 def detect_stop_keyword(transcript_text):
@@ -186,14 +196,3 @@ def capture_voice_command():
     """Capture voice input until stop keyword, return transcript content"""
     transcriber = VoiceTranscriber()
     return transcriber.start_transcription()
-
-
-if __name__ == "__main__":
-    print("Starting voice transcription...")
-    print("Say 'may the force be with you' to stop recording.")
-
-    content = capture_voice_command()
-    if content:
-        print(f"\nFinal captured content: '{content}'")
-    else:
-        print("No content captured")

@@ -1,0 +1,58 @@
+# Voice Control System Configuration
+# Centralized configuration for all hardcoded values extracted from the codebase
+
+# LLM Model Configuration
+models:
+  summarization: "openai/gpt-oss-120b"
+  parsing: "openai/gpt-oss-120b"
+
+# LLM API Parameters
+api_params:
+  summarization:
+    temperature: 0.3
+    max_completion_tokens: 300
+    top_p: 1
+    stream: false
+
+  parsing:
+    temperature: 0.1
+    max_completion_tokens: 300
+    top_p: 1
+    stream: false
+
+# Text-to-Speech Configuration
+tts:
+  groq:
+    model: "playai-tts"
+    voice: "Aaliyah-PlayAI"
+    response_format: "wav"
+
+  openai:
+    model: "tts-1"
+    voice: "alloy"
+    response_format: "wav"
+
+# Voice Transcription Settings
+voice:
+  stop_keyword: "may the force be with you"
+
+  # AssemblyAI Configuration
+  connection_params:
+    sample_rate: 16000
+    format_turns: true
+
+  # Audio Hardware Settings
+  audio:
+    frames_per_buffer: 800  # 50ms of audio
+    channels: 1
+    format: "paInt16"
+
+# TMUX Integration
+tmux:
+  session_name: "claude-active"
+
+# Debug and Logging
+debug:
+  enabled: true
+  show_prompts: true
+  show_llm_responses: true

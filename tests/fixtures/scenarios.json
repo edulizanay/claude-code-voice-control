@@ -1,0 +1,107 @@
+{
+  "notification_approve": {
+    "description": "User approves Claude's suggestion",
+    "hook_data": {
+      "session_id": "test-session-123",
+      "hook_event_name": "notification"
+    },
+    "voice_input": "yes approve that",
+    "llm_summary_response": "Creating test file with comprehensive coverage",
+    "llm_parse_response": "{\"action\": \"approve\"}",
+    "expected_subprocess_calls": [
+      {"cmd_contains": "afplay", "count": 1},
+      {"cmd_contains": ["tmux", "list-sessions"], "count": 1},
+      {"cmd_contains": ["tmux", "send-keys", "Enter"], "count": 1}
+    ],
+    "expected_llm_calls": 2,
+    "should_succeed": true
+  },
+  "notification_reject": {
+    "description": "User rejects Claude's suggestion with alternative",
+    "hook_data": {
+      "session_id": "test-session-456",
+      "hook_event_name": "notification"
+    },
+    "voice_input": "no, use pytest instead",
+    "llm_summary_response": "Creating test file",
+    "llm_parse_response": "{\"action\": \"reject\", \"text\": \"use pytest instead\"}",
+    "expected_subprocess_calls": [
+      {"cmd_contains": "afplay", "count": 1},
+      {"cmd_contains": ["tmux", "list-sessions"], "count": 1},
+      {"cmd_contains": ["tmux", "send-keys", "Escape"], "count": 1},
+      {"cmd_contains": ["tmux", "send-keys", " use pytest instead"], "count": 1},
+      {"cmd_contains": ["tmux", "send-keys", "Enter"], "count": 1}
+    ],
+    "expected_llm_calls": 2,
+    "should_succeed": true
+  },
+  "stop_event_command": {
+    "description": "User gives new command after Claude finishes",
+    "hook_data": {
+      "session_id": "test-session-789",
+      "hook_event_name": "stop"
+    },
+    "voice_input": "now run the tests",
+    "llm_summary_response": "Test file created successfully",
+    "llm_parse_response": "{\"action\": \"command\", \"text\": \"run the tests\"}",
+    "expected_subprocess_calls": [
+      {"cmd_contains": "afplay", "count": 1},
+      {"cmd_contains": ["tmux", "list-sessions"], "count": 1},
+      {"cmd_contains": ["tmux", "send-keys", " run the tests"], "count": 1},
+      {"cmd_contains": ["tmux", "send-keys", "Enter"], "count": 1}
+    ],
+    "expected_llm_calls": 2,
+    "should_succeed": true
+  },
+  "tmux_session_not_found": {
+    "description": "Error when TMUX session doesn't exist",
+    "hook_data": {
+      "session_id": "test-session-000",
+      "hook_event_name": "notification"
+    },
+    "voice_input": "approve",
+    "llm_summary_response": "Test summary",
+    "llm_parse_response": "{\"action\": \"approve\"}",
+    "tmux_list_sessions_returncode": 1,
+    "tmux_list_sessions_stdout": "",
+    "expected_subprocess_calls": [
+      {"cmd_contains": "afplay", "count": 1},
+      {"cmd_contains": ["tmux", "list-sessions"], "count": 1}
+    ],
+    "expected_llm_calls": 2,
+    "should_succeed": false,
+    "expected_error": "No Claude session found"
+  },
+  "voice_capture_failure": {
+    "description": "Error when voice capture returns None",
+    "hook_data": {
+      "session_id": "test-session-111",
+      "hook_event_name": "notification"
+    },
+    "voice_input": null,
+    "llm_summary_response": "Test summary",
+    "expected_subprocess_calls": [
+      {"cmd_contains": "afplay", "count": 1}
+    ],
+    "expected_llm_calls": 1,
+    "should_succeed": false,
+    "expected_error": "Voice capture failed"
+  },
+  "unclear_voice_command": {
+    "description": "Error when voice command is unclear",
+    "hook_data": {
+      "session_id": "test-session-222",
+      "hook_event_name": "notification"
+    },
+    "voice_input": "hmm I'm not sure what to do",
+    "llm_summary_response": "Test summary",
+    "llm_parse_response": "{\"action\": \"unclear\", \"text\": \"hmm not sure\"}",
+    "expected_subprocess_calls": [
+      {"cmd_contains": "afplay", "count": 1},
+      {"cmd_contains": ["tmux", "list-sessions"], "count": 1}
+    ],
+    "expected_llm_calls": 2,
+    "should_succeed": false,
+    "expected_error": "Unknown action: unclear"
+  }
+}

@@ -3,12 +3,33 @@
 # ABOUTME: Handles transcript summarization and voice command parsing with fallback
 
 import json
+import yaml
+from pathlib import Path
 from dotenv import load_dotenv
 from groq import Groq
 
 # Load environment variables from .env file
 load_dotenv()
 client = Groq()
+
+
+# Load prompts and config from YAML files
+def _load_prompts():
+    """Load prompts from prompts.yaml file"""
+    prompts_path = Path(__file__).parent / "prompts.yaml"
+    with open(prompts_path, "r") as f:
+        return yaml.safe_load(f)
+
+
+def _load_config():
+    """Load configuration from config.yaml file"""
+    config_path = Path(__file__).parent / "config.yaml"
+    with open(config_path, "r") as f:
+        return yaml.safe_load(f)
+
+
+PROMPTS = _load_prompts()
+CONFIG = _load_config()
 
 
 def summarize_transcript(transcript_data):
@@ -27,27 +48,23 @@ def summarize_transcript(transcript_data):
     # Extract last message
     _, last_message = last_message_tuple
 
-    # Call Groq API with your prompt template
+    # Call Groq API with prompt from YAML
     try:
+        prompt_template = PROMPTS["transcript_summarization"]["prompt"]
+        prompt_content = prompt_template.format(
+            context_text=context_text, last_message=last_message
+        )
+        print("🔍 DEBUG: Using transcript_summarization prompt from prompts.yaml")
+
         completion = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model=CONFIG["models"]["summarization"],
             messages=[
                 {
                     "role": "user",
-                    "content": f"""Hey, you are Claude Code. You are working with a user in a project together. Here are the last interactions or the conversation history:
-
-{context_text}
-
-And this is your last message:
-{last_message}
-
-Your objective is to summarize your last message in a few words, like "now i need to create  this file X to add the function for Y, or "let me run this bash command to find the missing key", or "great! all tests are passing".""",
+                    "content": prompt_content,
                 },
             ],
-            temperature=0.3,
-            max_completion_tokens=300,
-            top_p=1,
-            stream=False,
+            **CONFIG["api_params"]["summarization"],
         )
 
         summary = completion.choices[0].message.content
@@ -90,63 +107,22 @@ def parse_voice_command(speech_text, event_type="notification"):
 
     original_speech = speech_text.strip()
 
-    # Choose prompt based on event type
-    if event_type == "notification":
-        system_prompt = """You are parsing voice commands when Claude Code is waiting for approval/rejection.
-
-Context: Claude just made a suggestion and is waiting for user response.
-
-Categories:
-- 'approve': user agrees (→ send Enter key only)
-- 'reject': user disagrees and gives alternative (→ send Escape + alternative text + Enter)
-
-<thinking>
-1. Is the user agreeing or disagreeing with Claude's suggestion?
-2. If disagreeing, what alternative text should be sent to Claude?
-3. Remove filler words like "no", "instead", "reject", "actually", "nah" from the actionable text.
-</thinking>
-
-<response>
-Return JSON format:
-For approval: {"action": "approve"}
-For rejection: {"action": "reject", "text": "clean alternative text"}
-For unclear: {"action": "unclear"}
-</response>"""
-
-    else:  # event_type == "stop"
-        system_prompt = """You are parsing voice commands when Claude Code is ready for new input.
-
-Context: Claude finished a task and is ready for the next command.
-
-Categories:
-- 'command': user gives new instruction (→ send text + Enter)
-
-<thinking>
-1. What command does the user want to send to Claude?
-2. Clean up the text but preserve the core instruction.
-3. Remove hesitation words like "hmm", "maybe", "um", "actually", "you know what" but keep the actual command.
-4. Remove temporal words like "now", "let's", "go ahead and" but keep the action.
-</thinking>
-
-<response>
-Return JSON format:
-For command: {"action": "command", "text": "clean command text"}
-For unclear: {"action": "unclear"}
-</response>"""
+    # Get prompt from YAML based on event type
+    system_prompt = PROMPTS["voice_command_parsing"][event_type]["prompt"]
     try:
         print(f"🔍 DEBUG: Using event_type='{event_type}'")
+        print(
+            f"🔍 DEBUG: Using voice_command_parsing.{event_type} prompt from prompts.yaml"
+        )
         print(f"🔍 DEBUG: Input speech: '{original_speech}'")
 
         completion = client.chat.completions.create(
-            model="openai/gpt-oss-120b",
+            model=CONFIG["models"]["parsing"],
             messages=[
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": f"Voice: {original_speech}"},
             ],
-            temperature=0.1,
-            max_completion_tokens=300,
-            top_p=1,
-            stream=False,
+            **CONFIG["api_params"]["parsing"],
         )
 
         # Extract content from response
@@ -183,29 +159,3 @@ For unclear: {"action": "unclear"}
 def summarize_claude_actions(transcript_data):
     """Backward compatibility wrapper for existing voice control hook"""
     return summarize_transcript(transcript_data)
-
-
-if __name__ == "__main__":
-    # Test both functions
-    print("Testing transcript summarization...")
-    sample_transcript = [
-        ("USER", "write a function to calculate fibonacci"),
-        ("CLAUDE", "I'll create a fibonacci function using recursion"),
-    ]
-    summary = summarize_transcript(sample_transcript)
-    print(f"Summary: {summary}")
-
-    print("\nTesting command parsing...")
-    test_commands = [
-        "approve this",
-        "approve all changes",
-        "reject",
-        "no this is wrong",
-        "I'm not sure",
-    ]
-
-    for cmd in test_commands:
-        classification, original_speech = parse_voice_command(cmd)
-        print(
-            f"'{cmd}' -> classification: '{classification}', original: '{original_speech}'"
-        )

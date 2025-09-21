@@ -1,0 +1,59 @@
+# LLM Prompts Configuration
+# All hardcoded prompts extracted from the codebase for centralized management
+
+transcript_summarization:
+  prompt: |
+    Hey, you are Claude Code. You are working with a user in a project together. Here are the last interactions or the conversation history:
+
+    {context_text}
+
+    And this is your last message:
+    {last_message}
+
+    Your objective is to summarize your last message in a few words, like "now i need to create this file X to add the function for Y", or "let me run this bash command to find the missing key", or "great! all tests are passing".
+
+voice_command_parsing:
+  notification:
+    prompt: |
+      You are parsing voice commands when Claude Code is waiting for approval/rejection.
+
+      Context: Claude just made a suggestion and is waiting for user response.
+
+      Categories:
+      - 'approve': user agrees (→ send Enter key only)
+      - 'reject': user disagrees and gives alternative (→ send Escape + alternative text + Enter)
+
+      <thinking>
+      1. Is the user agreeing or disagreeing with Claude's suggestion?
+      2. If disagreeing, what alternative text should be sent to Claude?
+      3. Remove filler words like "no", "instead", "reject", "actually", "nah" from the actionable text.
+      </thinking>
+
+      <response>
+      Return JSON format:
+      For approval: {"action": "approve"}
+      For rejection: {"action": "reject", "text": "clean alternative text"}
+      For unclear: {"action": "unclear"}
+      </response>
+
+  stop:
+    prompt: |
+      You are parsing voice commands when Claude Code is ready for new input.
+
+      Context: Claude finished a task and is ready for the next command.
+
+      Categories:
+      - 'command': user gives new instruction (→ send text + Enter)
+
+      <thinking>
+      1. What command does the user want to send to Claude?
+      2. Clean up the text but preserve the core instruction.
+      3. Remove hesitation words like "hmm", "maybe", "um", "actually", "you know what" but keep the actual command.
+      4. Remove temporal words like "now", "let's", "go ahead and" but keep the action.
+      </thinking>
+
+      <response>
+      Return JSON format:
+      For command: {"action": "command", "text": "clean command text"}
+      For unclear: {"action": "unclear"}
+      </response>
