@@ -854,3 +854,30 @@
 [2025-09-20_13-11-21] Hook triggered: notification
 [2025-09-20_13-11-21] Captured data for notification (     377 bytes)
 [2025-09-20_13-11-21] Voice control processing completed for notification
+[2025-09-20_13-21-05] Hook triggered: notification
+[2025-09-20_13-21-05] Captured data for notification (     377 bytes)
+[2025-09-20_13-21-05] Voice control processing completed for notification
+[2025-09-20_13-21-16] Hook triggered: stop
+[2025-09-20_13-21-16] Captured data for stop (     369 bytes)
+[2025-09-20_13-21-16] Voice control processing completed for stop
+[2025-09-21_05-12-53] Hook triggered: stop
+[2025-09-21_05-12-53] Captured data for stop (     366 bytes)
+[2025-09-21_05-12-53] Voice control processing completed for stop
+[2025-09-21_05-15-25] Hook triggered: notification
+[2025-09-21_05-15-25] Captured data for notification (     381 bytes)
+[2025-09-21_05-15-25] Voice control processing completed for notification
+[2025-09-21_05-16-21] Hook triggered: notification
+[2025-09-21_05-16-21] Captured data for notification (     381 bytes)
+[2025-09-21_05-16-21] Voice control processing completed for notification
+[2025-09-21_05-16-53] Hook triggered: notification
+[2025-09-21_05-16-53] Captured data for notification (     379 bytes)
+[2025-09-21_05-16-53] Voice control processing completed for notification
+[2025-09-21_05-19-55] Hook triggered: stop
+[2025-09-21_05-19-55] Captured data for stop (     369 bytes)
+[2025-09-21_05-19-55] Voice control processing completed for stop
+[2025-09-21_05-20-56] Hook triggered: stop
+[2025-09-21_05-20-56] Captured data for stop (     369 bytes)
+[2025-09-21_05-20-56] Voice control processing completed for stop
+[2025-09-21_05-22-25] Hook triggered: stop
+[2025-09-21_05-22-25] Captured data for stop (     369 bytes)
+[2025-09-21_05-22-25] Voice control processing completed for stop

@@ -1,0 +1,41 @@
+{
+    "permissions": {
+      "allow": [
+        "Bash(python3 test_transcript.py:*)",
+        "Bash(chmod:*)",
+        "Bash(python3:*)",
+        "Read(//Users/eduardolizana/.claude/**)",
+        "Read(//private/tmp/**)",
+        "Bash(afplay:*)",
+        "Bash(git checkout:*)",
+        "Bash(PYTHONPATH=.. python3 test_tmux_controller.py)",
+        "Bash(PYTHONPATH=. python3 tests/test_tmux_controller.py)"
+      ]
+    },
+    "hooks": {
+      "Notification": [
+        {
+          "matcher": "",
+          "hooks": [
+            {
+              "type": "command",
+              "command": 
+  "/Users/eduardolizana/Documents/Github/claude-code-voice-control/claude_voice_hook.sh notification"
+            }
+          ]
+        }
+      ],
+      "Stop": [
+        {
+          "matcher": "",
+          "hooks": [
+            {
+              "type": "command",
+              "command": 
+  "/Users/eduardolizana/Documents/Github/claude-code-voice-control/claude_voice_hook.sh stop"
+            }
+          ]
+        }
+      ]
+    }
+  }
